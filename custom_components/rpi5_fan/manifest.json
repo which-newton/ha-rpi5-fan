@@ -1,0 +1,12 @@
+{
+  "domain": "rpi5_fan",
+  "name": "Raspberry Pi 5 Fan Control",
+  "codeowners": ["@which-newton"],
+  "config_flow": true,
+  "documentation": "https://github.com/which-newton/ha-rpi5-fan",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/which-newton/ha-rpi5-fan/issues",
+  "quality_scale": "silver",
+  "version": "1.0.0"
+}

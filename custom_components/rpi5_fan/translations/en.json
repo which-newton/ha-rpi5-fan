@@ -1,0 +1,45 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Raspberry Pi 5 Fan Control",
+        "description": "Detected:\n\nThermal zone: `{zone}`\nFan hwmon: `{hwmon}`\nActive trip points: {trips}\nControl writable: **{writable}**\n\nThis controls the Pi 5's 4-pin fan header via the kernel thermal governor. Curve changes are applied live and the governor stays in charge, so the last curve keeps being enforced even if Home Assistant stops.\n\nManual fixed-speed control is off by default — see the README before enabling it."
+      }
+    },
+    "abort": {
+      "not_supported": "No Raspberry Pi 5 'pwmfan' device found. This integration drives the Pi 5 fan header, not a GPIO-wired fan — for those, use one of the rpi_gpio_pwm integrations instead.",
+      "sysfs_unreadable": "Could not read /sys. On Home Assistant Container, /sys may be mounted read-only or unavailable.",
+      "already_configured": "Already set up."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options",
+        "data": {
+          "scan_seconds": "Poll interval",
+          "allow_manual": "Allow manual fixed-speed control"
+        },
+        "data_description": {
+          "allow_manual": "Manual speed requires DISABLING the kernel thermal governor. A watchdog hands control back after 90 seconds without a new value, and on reload or removal, but while it is active the machine has no kernel thermal protection. Leave off unless you need it."
+        }
+      }
+    }
+  },
+  "entity": {
+    "fan": { "fan": { "name": "[%key:component::rpi5_fan::title%]" } },
+    "select": {
+      "profile": {
+        "name": "Profile",
+        "state": {
+          "quiet": "Quiet (55/65/72/78 °C)",
+          "balanced": "Balanced — factory (50/60/67/75 °C)",
+          "cool": "Cool (45/53/60/68 °C)",
+          "aggressive": "Aggressive (40/47/54/61 °C)",
+          "manual": "Manual (fixed speed)"
+        }
+      }
+    }
+  },
+  "title": "Raspberry Pi 5 Fan"
+}
