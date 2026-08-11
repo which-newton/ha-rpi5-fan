@@ -14,10 +14,14 @@ class Rpi5FanEntity(CoordinatorEntity[FanCoordinator]):
     def __init__(self, coordinator: FanCoordinator, key: str) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{DOMAIN}_{key}"
+        # `manufacturer` is rendered as "by X" on the device page, which reads as
+        # authorship rather than hardware origin. Naming Raspberry Pi there implied
+        # they wrote or endorsed this integration — they did not. It now names what
+        # is actually being driven: the kernel's pwm-fan driver.
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, DOMAIN)},
             name="Raspberry Pi 5 Fan",
-            manufacturer="Raspberry Pi",
-            model="Pi 5 pwm-fan (thermal governor)",
+            manufacturer="Linux pwm-fan driver",
+            model="Pi 5 fan header, thermal-governor controlled",
             configuration_url="https://github.com/which-newton/ha-rpi5-fan",
         )

@@ -18,6 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: hacs/action@main
+      # Pinned to the latest tagged release rather than @main: a validator that
+      # can change under you turns a green build into a red one with no commit.
+      - uses: hacs/action@22.5.0
         with:
           category: integration
