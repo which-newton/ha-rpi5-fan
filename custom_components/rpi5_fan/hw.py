@@ -42,6 +42,8 @@ _LOGGER = logging.getLogger(__name__)
 THERMAL_GLOB = "/sys/class/thermal/thermal_zone*"
 HWMON_GLOB = "/sys/class/hwmon/hwmon*"
 FAN_HWMON_NAME = "pwmfan"
+COOLING_GLOB = "/sys/class/thermal/cooling_device*"
+FAN_COOLING_TYPE = "pwm-fan"
 CPU_ZONE_TYPES = ("cpu-thermal", "cpu_thermal")
 
 PWM_MAX = 255
@@ -88,6 +90,7 @@ class Paths:
 
     zone: str
     hwmon: str
+    cooling: str  # the pwm-fan cooling device, used to force a level re-sync
     active_trips: tuple[int, ...]  # trip indices with type == "active"
 
     @property
@@ -112,6 +115,10 @@ class Paths:
 
     def trip_temp(self, index: int) -> str:
         return f"{self.zone}/trip_point_{index}_temp"
+
+    @property
+    def cur_state(self) -> str:
+        return f"{self.cooling}/cur_state"
 
 
 def discover() -> Paths:
@@ -147,8 +154,19 @@ def discover() -> Paths:
     if not active:
         raise NotSupported(f"{zone} exposes no active trip points")
 
-    _LOGGER.debug("discovered zone=%s hwmon=%s active_trips=%s", zone, hwmon, active)
-    return Paths(zone=zone, hwmon=hwmon, active_trips=tuple(active))
+    cooling = None
+    for candidate in sorted(glob.glob(COOLING_GLOB)):
+        if (_read(f"{candidate}/type") or "") == FAN_COOLING_TYPE:
+            cooling = candidate
+            break
+    if cooling is None:
+        raise NotSupported("no 'pwm-fan' cooling device found")
+
+    _LOGGER.debug(
+        "discovered zone=%s hwmon=%s cooling=%s active_trips=%s",
+        zone, hwmon, cooling, active,
+    )
+    return Paths(zone=zone, hwmon=hwmon, cooling=cooling, active_trips=tuple(active))
 
 
 def writable(paths: Paths) -> bool:
@@ -195,13 +213,44 @@ def set_trips(paths: Paths, temps_c: list[int]) -> bool:
     return ok
 
 
+def _resync_level(paths: Paths) -> None:
+    """Force the fan to the level the current temperature warrants.
+
+    MEASURED BUG this exists to fix: re-enabling the governor does NOT make it
+    re-evaluate. After manual control the fan holds its last PWM indefinitely —
+    verified by leaving it at pwm=26 (10%) through a `mode=enabled` write AND a
+    trip-point rewrite, neither of which budged it. Harmless when it is stuck
+    high; genuinely unsafe when stuck low, because nothing corrects it until the
+    temperature happens to cross a trip on its own.
+
+    Writing the cooling device's cur_state makes the pwm-fan driver apply that
+    level immediately (verified: level 1 -> pwm 75, rpm 2743). The governor then
+    takes over normally from a correct starting point.
+    """
+    temp_mc = _read_int(paths.temp)
+    if temp_mc is None:
+        return
+    temp_c = temp_mc / 1000
+    trips = [
+        v / 1000
+        for v in (_read_int(paths.trip_temp(i)) for i in paths.active_trips)
+        if v is not None
+    ]
+    level = sum(1 for t in trips if temp_c >= t)
+    _write(paths.cur_state, str(level))
+
+
 def governor_enabled(paths: Paths, enabled: bool) -> bool:
     """Hand the fan back to the kernel, or take it away."""
     if enabled:
         # Order matters: re-arm the governor's own control of the PWM first, then
         # re-enable the zone, so there is no window where neither is steering.
         _write(paths.pwm_enable, str(PWM_ENABLE_GOVERNOR))
-        return _write(paths.mode, "enabled")
+        ok = _write(paths.mode, "enabled")
+        # ...and then force a re-evaluation, or the fan keeps whatever speed
+        # manual mode left it at. See _resync_level.
+        _resync_level(paths)
+        return ok
     _write(paths.mode, "disabled")
     return _write(paths.pwm_enable, str(PWM_ENABLE_MANUAL))
 

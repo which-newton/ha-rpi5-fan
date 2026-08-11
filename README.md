@@ -33,7 +33,21 @@ watchdog that hands the fan back to the kernel after 90 seconds without a new
 value — and also on reload, on removal, and on unload.
 
 The critical trip (`type=critical`, 110 °C — the thermal-shutdown threshold) is
-never read or written.
+never read or written. Trip discovery filters on `type == "active"` specifically
+so the critical trip cannot be included even by accident.
+
+### One non-obvious kernel behaviour, found by testing
+
+**Re-enabling the governor does not make it re-evaluate.** After manual control,
+the fan holds its last PWM indefinitely — measured: left at `pwm=26` (10%) through
+both a `mode=enabled` write *and* a trip-point rewrite, neither of which moved it.
+Harmless when stuck high, genuinely unsafe when stuck low, because nothing
+corrects it until the temperature happens to cross a trip on its own.
+
+So restoring control also writes the pwm-fan **cooling device's `cur_state`** with
+the level the current temperature warrants, which the driver applies immediately.
+Verified end to end: manual 10% (`pwm=26, rpm=751`) → restore → `pwm=75, rpm=2752`,
+governor `enabled`, curve intact.
 
 ## Entities
 
